@@ -25,7 +25,6 @@ fake = Faker()
 fake.add_provider(casetype_provider)
 fake.add_provider(casestatus_provider)
 
-# Function to generate fake data using Faker library
 def generate_fake_data():
     
     data = {
@@ -38,7 +37,7 @@ def generate_fake_data():
         'investigation': []
     }
 
-    # Generate department data
+    # generate department data
     # field officers, administrative workers and investigators.
 
     for department_type in ["field_officer", "administrative", "investigator"]:
@@ -48,7 +47,7 @@ def generate_fake_data():
         d['phone_number'] = fake.phone_number()
         data['department'].append(d)
         
-    # Generate employee data
+    # EMPLOYEE
     for i in range(30):
         e = {}
         e['employee_id'] = fake.unique.uuid4()[:8]
@@ -64,7 +63,7 @@ def generate_fake_data():
         e['address'] = fake.address()
         data['employee'].append(e)
 
-    # Generate cases data
+    # CASES
     for i in range(100):
         c = {}
         c['case_id'] = (fake.case_type() + fake.unique.uuid4())[:8]
@@ -74,7 +73,7 @@ def generate_fake_data():
         c['case_status'] = fake.case_status()
         data['cases'].append(c)
 
-    # Generate suspect data
+    # SUSPECT
     for i in range(50):
         s = {}
         s['citizen_id'] = fake.unique.ssn()
@@ -85,14 +84,14 @@ def generate_fake_data():
         s['phone_number'] = fake.phone_number()
         data['suspect'].append(s)
 
-    # Generate committed crime data
+    # COMMITED CRIME
     for case in data['cases']:
         c = {}
         c['case_id'] = case['case_id']
         c['citizen_id'] = random.choice(data['suspect'])['citizen_id']
         data['committed_crime'].append(c)
 
-    # Generate report data
+    # REPORT
     for i in range(50):
         r = {}
         r['report_id'] = fake.unique.random_number(digits=8)
@@ -115,35 +114,38 @@ def generate_fake_data():
     #print(data)
     return data
 
-#def write_csv(filename, data):
-#    with open(filename, 'w', newline='') as csvfile:
-#        tables = ['employee', 'department', 'cases', 'suspect', 'commited_crime', 'report', 'investigation']
-#        for table in tables:
-#            for row in data[table]:
-#                print(row)
-#                writer = csv.DictWriter(csvfile, fieldnames=row.keys())
-#                writer.writeheader()
-#                for entry in zip(*row.values()):
-#                    writer.writerow(dict(zip(row.keys(), entry)))
-
-def write_csv(filename, data):
-    with open(filename, 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        for key, values in data.items():
-            writer.writerow([key])
-            if values:  # Check if the list is not empty
-                header_written = False
-                for entry in values:
-                    if not header_written:
-                        writer.writerow(entry.keys())  # Write header only once
-                        header_written = True
-                    writer.writerow(entry.values())
-            writer.writerow([])  # Add an empty row between sections
-
+def write_csv(directory, data):
+    # Create the directory if it does not exist
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    for table_name, rows in data.items():
+        # Construct the file path
+        file_path = os.path.join(directory, f"{table_name}.csv")
+        
+        # Write the table to a CSV file
+        with open(file_path, 'w', newline='') as csvfile:
+            if rows:  # Only write if there are rows
+                writer = csv.DictWriter(csvfile, fieldnames=rows[0].keys())
+                writer.writeheader()
+                for row in rows:
+                    writer.writerow(row)
         
 
-def read_csv():
-    ('')
+def read_csv(directory):
+    data = {}
+
+    # Iterate over each file in the directory
+    for filename in os.listdir(directory):
+        if filename.endswith('.csv'):
+            file_path = os.path.join(directory, filename)
+            
+            # Read the CSV file
+            with open(file_path, 'r', newline='') as csvfile:
+                reader = csv.DictReader(csvfile)
+                data[filename[:-4]] = [row for row in reader]
+    
+    return data
 
 def connect_to_database():
     try:
@@ -162,7 +164,7 @@ def connect_to_database():
         else:
             print(err)
 
-# Function to insert data into database
+# insert data to database
 def insert_data(conn, cursor, table_name, data):
     try:
         if table_name == 'department':
@@ -187,47 +189,41 @@ if __name__ == "__main__":
     
     argv = sys.argv
     
-    # Input validation
+    # input validation
     if (len(argv) != 3 and len(argv) != 2) or (argv[1] != 'generate' and argv[1] != 'populate' ):
-        print('Invalid input.')
-        print('Usage: populator.py [generate | populate, filename]')
+        print('Usage: populator.py [generate | populate, csvpath]')
         exit()
     if len(argv) == 2 :
-        filename = 'fakedata.csv'
+        directory = os.path.join(os.getcwd(), 'dummydata')
     else: 
-        filename = argv[2]
-    if '.csv' not in filename:
-        if '.' in filename:
-            print('Usage only supported with .csv files.')
-        filename += '.csv'
+        directory = os.path.join(os.getcwd(), argv[2])
     
-    # Generate data
+    # GENERATE
     if argv[1] == 'generate':
-        if os.path.isfile(filename):
-            print('The file "' + filename + '" already exists.')
-            ans = input('This operation will override the existing file.\
-                  Do you want to continue? (y/n): ')
+        
+        # check if already generated files
+        if os.path.exists(directory) and os.path.isfile(os.path.join(directory, 'employee.csv')):    
+            print('There exists .csv files on the given path.')
+            ans = input('This operation will override the existing files.\
+                Do you want to continue? (y/n): ')
             if ans != 'y':
                 exit()
-        # Generate data
-        fake_data = generate_fake_data()
-        # Write data to file
-        write_csv(filename, fake_data)
 
-    # Populate database
+        fake_data = generate_fake_data()
+        
+        write_csv(directory, fake_data)
+
+    # POPULATE
     elif argv[1] == 'populate':
-        # Connect to database
+        
         conn = connect_to_database()
         cursor = conn.cursor()
         
-        # Read data
-        fake_data = read_csv(filename)
+        fake_data = read_csv(directory)
         
-        # Insert data into tables
         for table_name, data in fake_data.items():
             insert_data(conn, cursor, table_name, data)
 
-        # Close cursor and connection
         cursor.close()
         conn.close()
     
